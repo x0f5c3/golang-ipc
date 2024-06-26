@@ -57,32 +57,32 @@ func StartServer(ipcName string, config *ServerConfig) (*Server, error) {
 	return s, err
 }
 
-func (s *Server) acceptLoop() {
+func (sc *Server) acceptLoop() {
 
 	for {
-		conn, err := s.listen.Accept()
+		conn, err := sc.listen.Accept()
 		if err != nil {
 			break
 		}
 
-		if s.status == Listening || s.status == Disconnected {
+		if sc.status == Listening || sc.status == Disconnected {
 
-			s.conn = conn
+			sc.conn = conn
 
-			err2 := s.handshake()
+			err2 := sc.handshake()
 			if err2 != nil {
-				s.received <- &Message{Err: err2, MsgType: -1}
-				s.status = Error
-				s.listen.Close()
-				s.conn.Close()
+				sc.received <- &Message{Err: err2, MsgType: -1}
+				sc.status = Error
+				sc.listen.Close()
+				sc.conn.Close()
 
 			} else {
 
-				go s.read()
-				go s.write()
+				go sc.read()
+				go sc.write()
 
-				s.status = Connected
-				s.received <- &Message{Status: s.status.String(), MsgType: -1}
+				sc.status = Connected
+				sc.received <- &Message{Status: sc.status.String(), MsgType: -1}
 			}
 
 		}
@@ -91,15 +91,15 @@ func (s *Server) acceptLoop() {
 
 }
 
-func (s *Server) read() {
+func (sc *Server) read() {
 
 	bLen := make([]byte, 4)
 
 	for {
 
-		res := s.readData(bLen)
+		res := sc.readData(bLen)
 		if !res {
-			s.conn.Close()
+			sc.conn.Close()
 
 			break
 		}
@@ -108,31 +108,31 @@ func (s *Server) read() {
 
 		msgRecvd := make([]byte, mLen)
 
-		res = s.readData(msgRecvd)
+		res = sc.readData(msgRecvd)
 		if !res {
-			s.conn.Close()
+			sc.conn.Close()
 
 			break
 		}
 
-		if s.encryption {
-			msgFinal, err := decrypt(*s.enc.cipher, msgRecvd)
+		if sc.encryption {
+			msgFinal, err := decrypt(*sc.enc.cipher, msgRecvd)
 			if err != nil {
-				s.received <- &Message{Err: err, MsgType: -1}
+				sc.received <- &Message{Err: err, MsgType: -1}
 				continue
 			}
 
 			if bytesToInt(msgFinal[:4]) == 0 {
 				//  type 0 = control message
 			} else {
-				s.received <- &Message{Data: msgFinal[4:], MsgType: bytesToInt(msgFinal[:4])}
+				sc.received <- &Message{Data: msgFinal[4:], MsgType: bytesToInt(msgFinal[:4])}
 			}
 
 		} else {
 			if bytesToInt(msgRecvd[:4]) == 0 {
 				//  type 0 = control message
 			} else {
-				s.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
+				sc.received <- &Message{Data: msgRecvd[4:], MsgType: bytesToInt(msgRecvd[:4])}
 			}
 		}
 
@@ -140,23 +140,23 @@ func (s *Server) read() {
 
 }
 
-func (s *Server) readData(buff []byte) bool {
+func (sc *Server) readData(buff []byte) bool {
 
-	_, err := io.ReadFull(s.conn, buff)
+	_, err := io.ReadFull(sc.conn, buff)
 	if err != nil {
 
-		if s.status == Closing {
+		if sc.status == Closing {
 
-			s.status = Closed
-			s.received <- &Message{Status: s.status.String(), MsgType: -1}
-			s.received <- &Message{Err: errors.New("server has closed the connection"), MsgType: -1}
+			sc.status = Closed
+			sc.received <- &Message{Status: sc.status.String(), MsgType: -1}
+			sc.received <- &Message{Err: errors.New("server has closed the connection"), MsgType: -1}
 			return false
 		}
 
 		if err == io.EOF {
 
-			s.status = Disconnected
-			s.received <- &Message{Status: s.status.String(), MsgType: -1}
+			sc.status = Disconnected
+			sc.received <- &Message{Status: sc.status.String(), MsgType: -1}
 			return false
 		}
 
@@ -167,9 +167,9 @@ func (s *Server) readData(buff []byte) bool {
 
 // Read - blocking function, reads each message recieved
 // if MsgType is a negative number its an internal message
-func (s *Server) Read() (*Message, error) {
+func (sc *Server) Read() (*Message, error) {
 
-	m, ok := (<-s.received)
+	m, ok := <-sc.received
 	if !ok {
 		return nil, errors.New("the received channel has been closed")
 	}
@@ -185,7 +185,7 @@ func (s *Server) Read() (*Message, error) {
 
 // Write - writes a message to the ipc connection
 // msgType - denotes the type of data being sent. 0 is a reserved type for internal messages and errors.
-func (s *Server) Write(msgType int, message []byte) error {
+func (sc *Server) Write(msgType int, message []byte) error {
 
 	if msgType == 0 {
 		return errors.New("message type 0 is reserved")
@@ -193,26 +193,26 @@ func (s *Server) Write(msgType int, message []byte) error {
 
 	mlen := len(message)
 
-	if mlen > s.maxMsgSize {
+	if mlen > sc.maxMsgSize {
 		return errors.New("message exceeds maximum message length")
 	}
 
-	if s.status == Connected {
+	if sc.status == Connected {
 
-		s.toWrite <- &Message{MsgType: msgType, Data: message}
+		sc.toWrite <- &Message{MsgType: msgType, Data: message}
 
 	} else {
-		return errors.New(s.status.String())
+		return errors.New(sc.status.String())
 	}
 
 	return nil
 }
 
-func (s *Server) write() {
+func (sc *Server) write() {
 
 	for {
 
-		m, ok := <-s.toWrite
+		m, ok := <-sc.toWrite
 
 		if !ok {
 			break
@@ -220,11 +220,11 @@ func (s *Server) write() {
 
 		toSend := intToBytes(m.MsgType)
 
-		writer := bufio.NewWriter(s.conn)
+		writer := bufio.NewWriter(sc.conn)
 
-		if s.encryption {
+		if sc.encryption {
 			toSend = append(toSend, m.Data...)
-			toSendEnc, err := encrypt(*s.enc.cipher, toSend)
+			toSendEnc, err := encrypt(*sc.enc.cipher, toSend)
 			if err != nil {
 				log.Println("error encrypting data", err)
 				continue
@@ -251,35 +251,33 @@ func (s *Server) write() {
 	}
 }
 
-
 // getStatus - get the current status of the connection
-func (s *Server) getStatus() Status {
+func (sc *Server) getStatus() Status {
 
-	return s.status
+	return sc.status
 }
 
-
 // StatusCode - returns the current connection status
-func (s *Server) StatusCode() Status {
-	return s.status
+func (sc *Server) StatusCode() Status {
+	return sc.status
 }
 
 // Status - returns the current connection status as a string
-func (s *Server) Status() string {
+func (sc *Server) Status() string {
 
-	return s.status.String()
+	return sc.status.String()
 }
 
 // Close - closes the connection
-func (s *Server) Close() {
+func (sc *Server) Close() {
 
-	s.status = Closing
+	sc.status = Closing
 
-	if s.listen != nil {
-		s.listen.Close()
+	if sc.listen != nil {
+		sc.listen.Close()
 	}
 
-	if s.conn != nil {
-		s.conn.Close()
+	if sc.conn != nil {
+		sc.conn.Close()
 	}
 }

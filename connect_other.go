@@ -13,23 +13,23 @@ import (
 )
 
 // Server create a unix socket and start listening connections - for unix and linux
-func (s *Server) run() error {
+func (sc *Server) run() error {
 
 	base := "/tmp/"
 	sock := ".sock"
 
-	if err := os.RemoveAll(base + s.name + sock); err != nil {
+	if err := os.RemoveAll(base + sc.name + sock); err != nil {
 		return err
 	}
 
 	var oldUmask int
-	if s.unMask {
+	if sc.unMask {
 		oldUmask = syscall.Umask(0)
 	}
 
-	listen, err := net.Listen("unix", base+s.name+sock)
+	listen, err := net.Listen("unix", base+sc.name+sock)
 
-	if s.unMask {
+	if sc.unMask {
 		syscall.Umask(oldUmask)
 	}
 
@@ -37,11 +37,11 @@ func (s *Server) run() error {
 		return err
 	}
 
-	s.listen = listen
+	sc.listen = listen
 
-	go s.acceptLoop()
+	go sc.acceptLoop()
 
-	s.status = Listening
+	sc.status = Listening
 
 	return nil
 
@@ -56,7 +56,7 @@ func (c *Client) dial() error {
 	startTime := time.Now()
 
 	for {
-		
+
 		if c.timeout != 0 {
 
 			if time.Since(startTime).Seconds() > c.timeout {

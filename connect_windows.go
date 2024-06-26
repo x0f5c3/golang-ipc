@@ -11,27 +11,27 @@ import (
 // Server function
 // Create the named pipe (if it doesn't already exist) and start listening for a client to connect.
 // when a client connects and connection is accepted the read function is called on a go routine.
-func (s *Server) run() error {
+func (sc *Server) run() error {
 
 	var pipeBase = `\\.\pipe\`
 
 	var config *winio.PipeConfig
 
-	if s.unMask {
-		config = &winio.PipeConfig{SecurityDescriptor: "D:P(A;;GA;;;AU)"}
-	} 
+	if sc.unMask {
+		config = &winio.PipeConfig{SecurityDescriptor: "D:P(A;;GA;;;AU)", InputBufferSize: int32(sc.maxMsgSize), OutputBufferSize: int32(sc.maxMsgSize)}
+	}
 
-	listen, err := winio.ListenPipe(pipeBase+s.name, config)
+	listen, err := winio.ListenPipe(pipeBase+sc.name, config)
 	if err != nil {
 
 		return err
 	}
 
-	s.listen = listen
+	sc.listen = listen
 
-	s.status = Listening
+	sc.status = Listening
 
-	go s.acceptLoop()
+	go sc.acceptLoop()
 
 	return nil
 

@@ -3,6 +3,7 @@ package ipc
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -71,7 +72,7 @@ func (cc *Client) keyExchange() ([32]byte, error) {
 
 func generateKeys() (*ecdsa.PrivateKey, *ecdsa.PublicKey, error) {
 
-	priva, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	priva, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -128,7 +129,11 @@ func publicKeyToBytes(pub *ecdsa.PublicKey) []byte {
 		return nil
 	}
 
-	return elliptic.Marshal(elliptic.P384(), pub.X, pub.Y)
+	p, err := pub.ECDH()
+	if err != nil {
+		return nil
+	}
+	return p.Bytes()
 }
 
 func bytesToPublicKey(recvdPub []byte) *ecdsa.PublicKey {
@@ -137,8 +142,8 @@ func bytesToPublicKey(recvdPub []byte) *ecdsa.PublicKey {
 		return nil
 	}
 
-	x, y := elliptic.Unmarshal(elliptic.P384(), recvdPub)
-	return &ecdsa.PublicKey{Curve: elliptic.P384(), X: x, Y: y}
+	x, err := ecdh.P521().NewPublicKey(recvdPub)
+	ecdsa
 
 }
 

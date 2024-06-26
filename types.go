@@ -12,8 +12,8 @@ type Server struct {
 	listen     net.Listener
 	conn       net.Conn
 	status     Status
-	received   chan (*Message)
-	toWrite    chan (*Message)
+	received   chan *Message
+	toWrite    chan *Message
 	timeout    time.Duration
 	encryption bool
 	maxMsgSize int
@@ -28,8 +28,8 @@ type Client struct {
 	status        Status
 	timeout       float64       //
 	retryTimer    time.Duration // number of seconds before trying to connect again
-	received      chan (*Message)
-	toWrite       chan (*Message)
+	received      chan *Message
+	toWrite       chan *Message
 	encryption    bool
 	encryptionReq bool
 	maxMsgSize    int
